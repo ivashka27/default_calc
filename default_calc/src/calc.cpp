@@ -19,6 +19,8 @@ enum class Op {
     , NEG
     , POW
     , SQRT
+    , FACT //+
+    , LOG //+
 };
 
 std::size_t arity(const Op op)
@@ -29,6 +31,7 @@ std::size_t arity(const Op op)
         // unary
         case Op::NEG: return 1;
         case Op::SQRT: return 1;
+        case Op::FACT: return 1; //+
         // binary
         case Op::SET: return 2;
         case Op::ADD: return 2;
@@ -37,6 +40,7 @@ std::size_t arity(const Op op)
         case Op::DIV: return 2;
         case Op::REM: return 2;
         case Op::POW: return 2;
+        case Op::LOG: return 2; //+
     }
     return 0;
 }
@@ -75,6 +79,20 @@ Op parse_op(const std::string & line, std::size_t & i)
             return Op::NEG;
         case '^':
             return Op::POW;
+        case '!': //+
+            return Op::FACT; //+
+        case 'L': //+
+            switch (line[i++]) { //+
+                case 'O': //+
+                    switch (line[i++]) { //+
+                        case 'G': //+
+                            return Op::LOG; //+
+                        default: //+
+                            return rollback(3); //+
+                    } //+
+                default: //+
+                    return rollback(2); //+
+            } //+
         case 'S':
                 switch (line[i++]) {
                     case 'Q':
@@ -158,6 +176,17 @@ double unary(const double current, const Op op)
     switch (op) {
         case Op::NEG:
             return -current;
+        case Op::FACT: //+
+            if (current >= 0 && std::floor(current) == current) { //+
+                double res = 1.0; //+
+                for (long long k = 2; k <= static_cast<long long>(current); ++k) { //+
+                    res *= k; //+
+                } //+
+                return res; //+
+            } else { //+
+                std::cerr << "Bad argument for factorial: " <<current << std::endl; //+
+                return current; //+
+            } //+
         case Op::SQRT:
             if (current > 0) {
                 return std::sqrt(current);
@@ -200,6 +229,16 @@ double binary(const Op op, const double left, const double right)
             }
         case Op::POW:
             return std::pow(left, right);
+        case Op::LOG: //+
+            if (left <= 0) { //+
+                std::cerr << "Bad argument for logarithm: " << left << std::endl; //+
+                return left; //+
+            } //+
+            if (right <= 0 || right == 1.0) { //+
+                std::cerr << "Bad base for logarithm: " << right << std::endl; //+
+                return left; //+
+            } //+
+            return std::log(left) / std::log(right); //+
         default:
             return left;
     }
