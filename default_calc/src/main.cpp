@@ -1,4 +1,4 @@
-#include "calc.hpp"
+#include "../include/calc.hpp" // починил путь до инклюда
 
 #include <iostream>
 #include <string>
