@@ -1,4 +1,4 @@
-#include "calc.hpp"
+#include "../include/calc.hpp" //исправлен путь до папки
 
 #include <iostream>
 #include <string>
