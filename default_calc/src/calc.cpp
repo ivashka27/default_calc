@@ -112,44 +112,57 @@ double parse_arg(const std::string & line, std::size_t & i)
     bool good = true;
     bool integer = true;
     double fraction = 1;
-    while (good && i < line.size() && count < max_decimal_digits) {
-        switch (line[i]) {
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-                if (integer) {
-                    res *= 10;
-                    res += line[i] - '0';
-                }
-                else {
-                    fraction /= 10;
-                    res += (line[i] - '0') * fraction;
-                }
-                ++i;
-                ++count;
-                break;
-            case '.':
-                integer = false;
-                ++i;
-                break;
-            default:
-                good = false;
-                break;
+    int base = 10;
+
+    if (i < line.size() && line[i] == '0') {
+        if (i + 1 < line.size()) {
+            char next = line[i + 1];
+            if (next == 'x' || next == 'X') {
+                base = 16;
+                i += 2;
+            } else if (next == 'b' || next == 'B') {
+                base = 2;
+                i += 2;
+            } else if (next >= '0' && next <= '9') {
+                base = 8;
+                i += 1;
+            }
         }
     }
-    if (!good) {
-        std::cerr << "Argument parsing error at " << i << ": '" << line.substr(i) << "'" << std::endl;
+
+    while (good && i < line.size() && count < max_decimal_digits) {
+        char c = line[i];
+        int val = -1;
+
+        if (c >= '0' && c <= '9') {
+            val = c - '0';
+        } else if (c >= 'a' && c <= 'f') {
+            val = c - 'a' + 10;
+        } else if (c >= 'A' && c <= 'F') {
+            val = c - 'A' + 10;
+        }
+
+        if (val >= 0 && val < base) {
+            if (integer) {
+                res *= base;
+                res += val;
+            } else {
+                fraction /= base;
+                res += val * fraction;
+            }
+            ++i;
+            
+            if (res > 0 || !integer) {
+                ++count;
+            }
+        } else if (c == '.') {
+            integer = false;
+            ++i;
+        } else {
+            good = false;
+        }
     }
-    else if (i < line.size()) {
-        std::cerr << "Argument isn't fully parsed, suffix left: '" << line.substr(i) << "'" << std::endl;
-    }
+
     return res;
 }
 
@@ -210,7 +223,55 @@ double binary(const Op op, const double left, const double right)
 double process_line(const double current, const std::string & line)
 {
     std::size_t i = 0;
+    
+    bool is_fold = false;
+    if (i < line.size() && line[i] == '(') {
+        is_fold = true;
+        ++i;
+    }
+
     const auto op = parse_op(line, i);
+
+    if (is_fold) {
+        if (i >= line.size() || line[i] != ')') {
+            std::cerr << "Expected ')' after fold operation" << std::endl;
+            return current;
+        }
+        ++i;
+
+        if (arity(op) != 2 || op == Op::SET) {
+            std::cerr << "Fold requires a binary operation" << std::endl;
+            return current;
+        }
+
+        double result = current;
+        bool has_args = false;
+
+        while (true) {
+            i = skip_ws(line, i);
+            if (i >= line.size()) {
+                break;
+            }
+
+            const auto old_i = i;
+            const auto arg = parse_arg(line, i);
+
+            if (i == old_i) {
+                std::cerr << "Invalid argument in fold operation at index " << i << ": '" << line.substr(i) << "'" << std::endl;
+                break; 
+            }
+            result = binary(op, result, arg);
+            has_args = true;
+        }
+
+        if (!has_args) {
+            std::cerr << "No arguments provided for fold" << std::endl;
+            return current;
+        }
+
+        return result;
+    }
+
     switch (arity(op)) {
         case 2: {
                     i = skip_ws(line, i);
@@ -221,6 +282,7 @@ double process_line(const double current, const std::string & line)
                         break;
                     }
                     else if (i < line.size()) {
+                        std::cerr << "Unexpected suffix after binary operation: '" << line.substr(i) << "'" << std::endl;
                         break;
                     }
                     return binary(op, current, arg);
