@@ -7,7 +7,8 @@ int main()
 {
     double current = 0;
     for (std::string line; std::getline(std::cin, line); ) {
-        current = process_line(current, line);
+        bool rad_on;
+        current = process_line(current, rad_on, line);
         std::cout << current << std::endl;
     }
 }
