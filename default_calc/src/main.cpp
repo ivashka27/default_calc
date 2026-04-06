@@ -1,4 +1,4 @@
-#include "calc.hpp"
+#include "../include/calc.hpp"
 
 #include <iostream>
 #include <string>
@@ -10,4 +10,4 @@ int main()
         current = process_line(current, line);
         std::cout << current << std::endl;
     }
-}
+} 
