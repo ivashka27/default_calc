@@ -105,8 +105,36 @@ std::size_t skip_ws(const std::string & line, std::size_t i)
     return i;
 }
 
+/*
+Ссчитаем первые два символа аргумента, чтобы определить 
+систему счисления аргумента
+*/
+int find_the_number_system(const std::string & line, std::size_t & i){
+    int j = 0;
+    std::string ns;
+    while (i < line.size() && j < 2){
+        ns += line[i];
+        i++;
+        j++;
+    }
+    std::cout << ns << '\n';
+    if (ns == "0x" || ns == "0X")
+        return 16;
+    else if (ns == "0b" || ns == "0B")
+        return 2;
+    else if (ns[0] == '0' && j != 1){
+        i -= 1;
+        return 8;
+    }
+    else{
+        i -= j;
+        return 10;
+    }
+}
+
 double parse_arg(const std::string & line, std::size_t & i)
 {
+    int number_system = find_the_number_system(line, i); 
     double res = 0;
     std::size_t count = 0;
     bool good = true;
@@ -125,11 +153,11 @@ double parse_arg(const std::string & line, std::size_t & i)
             case '8':
             case '9':
                 if (integer) {
-                    res *= 10;
+                    res *= number_system; // меняем систему счисления
                     res += line[i] - '0';
                 }
                 else {
-                    fraction /= 10;
+                    fraction /= number_system; // аналогично
                     res += (line[i] - '0') * fraction;
                 }
                 ++i;
