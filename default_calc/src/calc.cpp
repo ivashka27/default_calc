@@ -8,6 +8,20 @@ namespace {
 
 const std::size_t max_decimal_digits = 10;
 
+// перевод букв шестнадцатиричной системы в десятичные числа
+int hex_to_dec(char c) {
+    if (std::isdigit(c)) {
+        return c - '0';
+    };
+    if (std::islower(c)) {
+        return c - 'a' + 10;
+    };
+    if (std::isupper(c)) {
+        return c - 'A' + 10;
+    };
+    return -1;
+}
+
 enum class Op {
       ERR
     , SET
@@ -112,6 +126,29 @@ double parse_arg(const std::string & line, std::size_t & i)
     bool good = true;
     bool integer = true;
     double fraction = 1;
+    int num_sys = 10; // переменная для хранения системы счисления
+
+    // определение системы счисления
+    if (i < line.size() && line[i] == '0') {
+        i++; 
+        if (i < line.size()) {
+            if (line[i] == 'x' || line[i] == 'X') {
+                num_sys = 16;
+                i++;
+            }
+            else if (line[i] == 'b' || line[i] == 'B') {
+                num_sys = 2;
+                i++;
+            }
+            else if (std::isdigit(line[i])) {
+                num_sys = 8;
+            }
+            else {
+                num_sys = 10;
+            }
+        }
+    }
+
     while (good && i < line.size() && count < max_decimal_digits) {
         switch (line[i]) {
             case '0':
@@ -144,6 +181,36 @@ double parse_arg(const std::string & line, std::size_t & i)
                 break;
         }
     }
+
+    // изменен цикл while
+    while (good && i < line.size() && count < max_decimal_digits) {
+        char c = line[i];
+        int value = hex_to_dec(c); // преобразуем символ в десятичное число
+        if (value >= 0 && value < num_sys) { // проверка, подходит ли число под данную систему счисления (вместо switch-case)
+            if (integer) {
+                res *= num_sys;
+                res += value;
+            }
+            else {
+                fraction /= num_sys;
+                res += value * fraction;
+            }
+            ++i;
+            ++count;
+        }
+        else if (c == '.') { // проверка, если данный символ - точка
+            if (!integer) { // проверка, что не стоят две точки подряд
+                good = false;
+                break;
+            }
+            integer = false;
+            ++i;
+        }
+        else {
+            good = false;
+        }
+    }
+
     if (!good) {
         std::cerr << "Argument parsing error at " << i << ": '" << line.substr(i) << "'" << std::endl;
     }
