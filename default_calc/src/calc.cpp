@@ -105,6 +105,8 @@ std::size_t skip_ws(const std::string & line, std::size_t i)
     return i;
 }
 
+//Изменения!
+
 double parse_arg(const std::string & line, std::size_t & i)
 {
     double res = 0;
@@ -112,38 +114,63 @@ double parse_arg(const std::string & line, std::size_t & i)
     bool good = true;
     bool integer = true;
     double fraction = 1;
-    while (good && i < line.size() && count < max_decimal_digits) {
-        switch (line[i]) {
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-                if (integer) {
-                    res *= 10;
-                    res += line[i] - '0';
-                }
-                else {
-                    fraction /= 10;
-                    res += (line[i] - '0') * fraction;
-                }
-                ++i;
-                ++count;
-                break;
-            case '.':
-                integer = false;
-                ++i;
-                break;
-            default:
-                good = false;
-                break;
+    int base = 10; // вводим переменную для базы
+
+    // читаем префикс (для системы счисления)
+    if (i < line.size() && line[i] == '0') {
+        if (i + 1 < line.size()) {
+            char next = std::tolower(line[i + 1]); //делаем нижний регистр чисто для удобства для работы дальше (т. к. по заданию регистр не должен иметь значения)
+            if (next == 'x') {
+                base = 16;
+                i += 2;
+            } else if (next == 'b') {
+                base = 2;
+                i += 2;
+            } else if (next >= '0' && next <= '7') {
+                base = 8;
+                i += 1;
+            }
         }
     }
+
+    //читаем символы
+    while (good && i < line.size() && count < max_decimal_digits) {
+        if (line[i] == '.') {
+            if (!integer) {
+                good = false;
+                break;
+            }
+            integer = false;
+            ++i;
+            continue;
+        }
+
+        // перевод символа
+        int val = -1; // для числового значения
+        if (line[i] >= '0' && line[i] <= '9') {
+            val = line[i] - '0';
+        } else if (line[i] >= 'a' && line[i] <= 'f') {
+            val = line[i] - 'a' + 10;
+        } else if (line[i] >= 'A' && line[i] <= 'F') {
+            val = line[i] - 'A' + 10;
+        }
+
+        //собираем число
+        if (val >= 0 && val < base) { //собственно, здесь и ниже подставляем нужную базу
+            if (integer) {
+                res *= base; 
+                res += val;
+            } else {
+                fraction /= base;
+                res += val * fraction;
+            }
+            ++i;
+            ++count;
+        } else {
+            good = false;
+        }
+    }
+
     if (!good) {
         std::cerr << "Argument parsing error at " << i << ": '" << line.substr(i) << "'" << std::endl;
     }
