@@ -19,6 +19,8 @@ enum class Op {
     , NEG
     , POW
     , SQRT
+    , LOG   //logarifm
+    , FACT  //factorial
 };
 
 std::size_t arity(const Op op)
@@ -29,6 +31,7 @@ std::size_t arity(const Op op)
         // unary
         case Op::NEG: return 1;
         case Op::SQRT: return 1;
+        case Op::FACT: return 1;    //factorial
         // binary
         case Op::SET: return 2;
         case Op::ADD: return 2;
@@ -37,6 +40,7 @@ std::size_t arity(const Op op)
         case Op::DIV: return 2;
         case Op::REM: return 2;
         case Op::POW: return 2;
+        case Op::LOG: return 2;     //logarifm
     }
     return 0;
 }
@@ -75,6 +79,20 @@ Op parse_op(const std::string & line, std::size_t & i)
             return Op::NEG;
         case '^':
             return Op::POW;
+        case '!':
+            return Op::FACT; //factorial
+        case 'L':
+            switch (line[i++]) {
+                case 'O':
+                    switch (line[i++]) {
+                        case 'G':
+                            return Op::LOG;
+                        default:
+                            return rollback(3);
+                    }
+                default:
+                    return rollback(2);
+            }               //logarifm
         case 'S':
                 switch (line[i++]) {
                     case 'Q':
@@ -153,6 +171,20 @@ double parse_arg(const std::string & line, std::size_t & i)
     return res;
 }
 
+double factorial(double n) {
+    if (n < 0 || std::floor(n) != n) {
+        std::cerr << "Bad argument for factorial: " << n << std::endl;
+        return n;
+    }
+    
+    int int_n = static_cast<int>(n);
+    double result = 1.0;
+    for (int i = 2; i <= int_n; ++i) {
+        result *= i;
+    }
+    return result;
+}
+
 double unary(const double current, const Op op)
 {
     switch (op) {
@@ -166,6 +198,10 @@ double unary(const double current, const Op op)
                 std::cerr << "Bad argument for SQRT: " << current << std::endl;
                 [[fallthrough]];
             }
+
+        case Op::FACT:
+            return factorial(current);
+
         default:
             return current;
     }
@@ -200,6 +236,17 @@ double binary(const Op op, const double left, const double right)
             }
         case Op::POW:
             return std::pow(left, right);
+        
+        case Op::LOG:
+            if (left <= 0) {
+                std::cerr << "Bad argument for logarithm: " << left << std::endl;
+                return left;
+            }
+            if (right <= 0 || right == 1) {
+                std::cerr << "Bad base for logarithm: " << right << std::endl;
+                return left;
+            }
+            return std::log(left) / std::log(right);
         default:
             return left;
     }
