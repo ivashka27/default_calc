@@ -7,6 +7,7 @@
 namespace {
 
 const std::size_t max_decimal_digits = 10;
+const double pi = 3.14159;
 
 enum class Op {
       ERR
@@ -19,6 +20,16 @@ enum class Op {
     , NEG
     , POW
     , SQRT
+    , SIN
+    , COS
+    , TAN
+    , CTN
+    , ASIN
+    , ACOS
+    , ATAN
+    , ACTN
+    , RAD
+    , DEG 
 };
 
 std::size_t arity(const Op op)
@@ -29,6 +40,16 @@ std::size_t arity(const Op op)
         // unary
         case Op::NEG: return 1;
         case Op::SQRT: return 1;
+	case Op::SIN: return 1;
+	case Op::COS: return 1;
+	case Op::TAN: return 1;
+	case Op::CTN: return 1;
+	case Op::ASIN: return 1;
+	case Op::ACOS: return 1;
+	case Op::ATAN: return 1;
+	case Op::ACTN: return 1;
+	case Op::RAD: return 1;
+	case Op::DEG: return 1;
         // binary
         case Op::SET: return 2;
         case Op::ADD: return 2;
@@ -89,9 +110,120 @@ Op parse_op(const std::string & line, std::size_t & i)
                             default:
                                 return rollback(3);
                         }
+		    case 'I':
+			switch (line[i++]) {
+			    case 'N':
+				return Op::SIN;
+			    default:
+				return rollback(3);
+			}
                     default:
                         return rollback(2);
                 }
+	case 'C':
+	    switch (line[i++]) {
+		case 'O':
+		    switch (line[i++]) {
+			case 'S':
+			    return Op::COS;
+			default:
+			    return rollback(3);
+		    }
+		case 'T':
+		    switch (line[i++]) {
+			case 'N':
+			    return Op::CTN;
+			default:
+			    return rollback(3);
+		    }
+		default:
+		    return rollback(2);
+	    }
+	case 'T':
+	    switch (line[i++]) {
+		case 'A':
+		    switch (line[i++]) {
+			case 'N':
+			    return Op::TAN;
+			default:
+			    return rollback(3);
+		    }
+		default:
+		    return rollback(2);
+	    }
+	case 'A':
+	    switch (line[i++]) {
+		case 'S':
+		    switch (line[i++]) {
+		        case 'I':
+			    switch (line[i++]) {
+				case 'N':
+				    return Op::ASIN;
+				default:
+				    return rollback(4);
+			    }
+			default:
+			    return rollback(3);
+		    }
+		case 'C':
+                    switch (line[i++]) {
+                        case 'O':
+                            switch (line[i++]) {
+                                case 'S':
+                                    return Op::ACOS;
+                                default:
+                                    return rollback(4);
+                            }
+			case 'T':
+                            switch (line[i++]) {
+                                case 'N':
+                                    return Op::ACTN;
+                                default:
+                                    return rollback(4);
+                            }
+                        default:
+                            return rollback(3);
+                    }
+		case 'T':
+		    switch (line[i++]) {
+                        case 'A':
+                            switch (line[i++]) {
+                                case 'N':
+                                    return Op::ATAN;
+                                default:
+                                    return rollback(4);
+                            }
+                        default:
+                            return rollback(3);
+                    }
+
+		default:
+		    return rollback(2);
+	    }
+        case 'R':
+            switch (line[i++]) {
+                case 'A':
+                    switch (line[i++]) {
+                        case 'D':
+                            return Op::RAD;
+                        default:
+                            return rollback(3);
+                    }
+                default:
+                    return rollback(2);
+	    }
+        case 'D':
+            switch (line[i++]) {
+                case 'E':
+                    switch (line[i++]) {
+                        case 'G':
+                            return Op::DEG;
+                        default:
+                            return rollback(3);
+                    }
+                default:
+                    return rollback(2);
+            }
         default:
                 return rollback(1);
     }
@@ -153,8 +285,11 @@ double parse_arg(const std::string & line, std::size_t & i)
     return res;
 }
 
-double unary(const double current, const Op op)
+double unary(const double current, bool & rad_on, const Op op)
 {
+    auto degrees_to_rad = [rad_on](double result) {
+	return (rad_on) ? result : (result * pi / 180);
+    };
     switch (op) {
         case Op::NEG:
             return -current;
@@ -164,8 +299,52 @@ double unary(const double current, const Op op)
             }
             else {
                 std::cerr << "Bad argument for SQRT: " << current << std::endl;
-                [[fallthrough]];
+                return current; // change nothing
             }
+	case Op::SIN:
+	    return std::sin(degrees_to_rad(current));
+	case Op::COS:
+	    return std::cos(degrees_to_rad(current));
+        case Op::TAN:
+	    return std::tan(degrees_to_rad(current));
+        case Op::CTN:
+	    return 1/std::tan(degrees_to_rad(current));
+        case Op::ASIN:
+	    if (current >= -1 && current <= 1) {
+	        double result =  std::asin(current);
+		return (rad_on) ? result : result * 180 / pi;
+	    }
+	    else {
+		std::cerr << "Bad argument for ASIN: " << current << std::endl;
+		return current;
+	    }
+        case Op::ACOS:
+	    if (current >= -1 && current <= 1) {
+		double result = std::acos(current);
+	        return (rad_on) ? result : result * 180 / pi;
+	    }
+	    else {
+		std::cerr << "Bad argument for ACOS " << current << std::endl;
+		return current;
+	    }
+        case Op::ATAN: { // brackets for local scope for variable result
+ 	    double result = std::atan(current);
+	    return (rad_on) ? result : result * 180 / pi;
+	}
+        case Op::ACTN: {
+	    double result = (pi/2) - std::atan(current);
+	    return (rad_on) ? result : result * 180 / pi;
+	}
+        case Op::RAD: {
+	    double result = (rad_on) ? current : degrees_to_rad(current);
+	    rad_on = true;
+	    return result;
+	}
+        case Op::DEG: {
+	    double result = (rad_on) ? current * 180 / pi : current;
+	    rad_on = false;
+	    return result;
+	}
         default:
             return current;
     }
@@ -207,7 +386,7 @@ double binary(const Op op, const double left, const double right)
 
 } // anonymous namespace
 
-double process_line(const double current, const std::string & line)
+double process_line(const double current, bool & rad_on, const std::string & line)
 {
     std::size_t i = 0;
     const auto op = parse_op(line, i);
@@ -230,7 +409,7 @@ double process_line(const double current, const std::string & line)
                         std::cerr << "Unexpected suffix for a unary operation: '" << line.substr(i) << "'" << std::endl;
                         break;
                     }
-                    return unary(current, op);
+                    return unary(current, rad_on, op);
                 }
         default: break;
     }
