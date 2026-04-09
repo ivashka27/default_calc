@@ -9,7 +9,7 @@ namespace {
 
 const std::size_t max_decimal_digits = 10;
 const double pi = M_PI;
-const double threshold = 1e-10;
+const double treshold = 1e-10;
 
 enum class Op {
       ERR
@@ -238,55 +238,6 @@ std::size_t skip_ws(const std::string & line, std::size_t i)
     return i;
 }
 
-bool parse_fold_op(const std::string & line, std::size_t & i, Op & op)
-{
-    if (i >= line.size() || line[i] != '('){
-        return false;
-    }
-
-    ++i;
-
-    i = skip_ws(line, i);
-
-    const auto op_start = i;
-
-    while (i < line.size() && line[i] != ')' && !std::isspace(line[i])){
-        ++i;
-    }
-
-    if (op_start == i){
-        std::cerr << "No operation in fold expresson" << std::endl;
-        return false;
-    }
-
-    const std::string op_text = line.substr(op_start, i - op_start);
-
-    i = skip_ws(line, i);
-
-    if (i >= line.size() || line[i] != ')') {
-        std::cerr << "Missing ')' in fold expression" << std::endl;
-        return false;
-    }
-
-    ++i;
-
-    std::size_t op_i = 0;
-
-    op = parse_op(op_text, op_i);
-
-    if (op == Op::ERR || op_i != op_text.size()){
-        return false;
-    }
-
-    if (op == Op::SET || arity(op) != 2){
-        std::cerr << "Unsupported operation for fold: " << op_text << std::endl;
-        return false;
-    }
-
-    return true;
-
-}
-
 double parse_arg(const std::string & line, std::size_t & i)
 {
     double res = 0;
@@ -355,15 +306,15 @@ double unary(const double current, bool & rad_on, const Op op)
             return current;
         case Op::SIN: {
             double angle = rad_on ? current : current * pi / 180.0;
-            return std::abs(sin(angle)) < threshold ? 0.0 : sin(angle);
+            return std::abs(sin(angle)) < treshold ? 0.0 : sin(angle);
         }
         case Op::COS: {
             double angle = rad_on ? current : current * pi / 180.0;
-            return std::abs(cos(angle)) < threshold ? 0.0 : cos(angle);
+            return std::abs(cos(angle)) < treshold ? 0.0 : cos(angle);
         }
         case Op::TAN: {
             double angle = rad_on ? current : current * pi / 180.0;
-            if (std::abs(cos(angle)) < threshold) {
+            if (std::abs(cos(angle)) < treshold) {
                 std::cerr << "Bad arg for TAN: " << current << std::endl;
                 return current;
             }
@@ -371,7 +322,7 @@ double unary(const double current, bool & rad_on, const Op op)
         }
         case Op::CTN: {
             double angle = rad_on ? current : current * pi / 180.0;
-            if (std::abs(sin(angle)) < threshold) {
+            if (std::abs(sin(angle)) < treshold) {
                 std::cerr << "Bad arg for CTN: " << current << std::endl;
                 return current;
             }
@@ -436,62 +387,11 @@ double binary(const Op op, const double left, const double right)
     }
 }
 
-double left_fold(const double current, const Op op, const std::string & line, std::size_t i){
-    double result = current;
-
-    bool has_args = false;
-
-    while (true){
-        i = skip_ws(line, i);
-        if (i >= line.size()){
-            break;
-        }
-
-        const auto arg_start = i;
-
-        while (i < line.size() && !std::isspace(line[i])){
-            i++;
-        }
-
-        const std::string operand = line.substr(arg_start, i - arg_start);
-
-        std::size_t operand_i = 0;
-
-        const double arg = parse_arg(operand, operand_i);
-
-        if (operand_i == 0 || operand_i != operand.size()){
-            return current;
-        }
-
-        has_args = true;
-
-        result = binary(op, result, arg);
-    }
-
-    if(!has_args){
-        std::cerr << "No arguments given" << std::endl;
-        return current;
-    }
-
-    return result;
-
-}
-
 } // anonymous namespace
 
 double process_line(const double current, bool & rad_on, const std::string & line)
 {
     std::size_t i = 0;
-
-    if(line[i] == '('){
-        Op fold_op = Op::ERR;
-
-        if(!parse_fold_op(line, i, fold_op)){
-            return current;
-        }
-        return left_fold(current, fold_op, line, i);
-    }
-
     const auto op = parse_op(line, i);
     switch (arity(op)) {
         case 2: {
