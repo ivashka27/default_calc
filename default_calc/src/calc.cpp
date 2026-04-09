@@ -9,7 +9,28 @@ namespace {
 
 const std::size_t max_decimal_digits = 10;
 
-enum class Op { ERR, SET, ADD, SUB, MUL, DIV, REM, NEG, POW, SQRT };
+enum class Op {
+  ERR,
+  SET,
+  ADD,
+  SUB,
+  MUL,
+  DIV,
+  REM,
+  NEG,
+  POW,
+  SQRT,
+  SIN,
+  COS,
+  TAN,
+  CTN,
+  RAD,
+  DEG,
+  ASIN,
+  ACOS,
+  ATAN,
+  ACTN
+};
 
 std::size_t arity(const Op op) {
   switch (op) {
@@ -18,8 +39,17 @@ std::size_t arity(const Op op) {
     return 0;
   // unary
   case Op::NEG:
-    return 1;
   case Op::SQRT:
+  case Op::SIN:
+  case Op::COS:
+  case Op::TAN:
+  case Op::CTN:
+  case Op::RAD:
+  case Op::DEG:
+  case Op::ASIN:
+  case Op::ACOS:
+  case Op::ATAN:
+  case Op::ACTN:
     return 1;
   // binary
   case Op::SET:
@@ -70,9 +100,29 @@ std::pair<Op, std::size_t> parse_op(const std::string &line, std::size_t i) {
   }
 
   // to avoid ugly nesting with switch statements
-  if (line.compare(i, 4, "SQRT") == 0) {
+  if (line.compare(i, 4, "SQRT") == 0)
     return {Op::SQRT, i + 4};
-  }
+  if (line.compare(i, 4, "ASIN") == 0)
+    return {Op::ASIN, i + 4};
+  if (line.compare(i, 4, "ACOS") == 0)
+    return {Op::ACOS, i + 4};
+  if (line.compare(i, 4, "ATAN") == 0)
+    return {Op::ATAN, i + 4};
+  if (line.compare(i, 4, "ACTN") == 0)
+    return {Op::ACTN, i + 4};
+
+  if (line.compare(i, 3, "SIN") == 0)
+    return {Op::SIN, i + 3};
+  if (line.compare(i, 3, "COS") == 0)
+    return {Op::COS, i + 3};
+  if (line.compare(i, 3, "TAN") == 0)
+    return {Op::TAN, i + 3};
+  if (line.compare(i, 3, "CTN") == 0)
+    return {Op::CTN, i + 3};
+  if (line.compare(i, 3, "RAD") == 0)
+    return {Op::RAD, i + 3};
+  if (line.compare(i, 3, "DEG") == 0)
+    return {Op::DEG, i + 3};
 
   std::cerr << "Unknown operation " << line << std::endl;
   return {Op::ERR, i};
@@ -135,17 +185,62 @@ std::pair<double, std::size_t> parse_arg(const std::string &line,
   return {res, i};
 }
 
-double unary(const double current, const Op op) {
+double unary(const double current, bool &rad_on, const Op op) {
+  // added for reusability
+  auto cout_bad_argument = [current](std::string name) {
+    std::cerr << "Bad argument for " << name << ": " << current << std::endl;
+    return current;
+  };
+
+  // There is no way to further simplify the switch code
+  // because of the considerations: radians, available cmath, boundaries
+  auto to_radians = [](double deg) { return deg * M_PI / 180.0; };
+  auto to_degrees = [](double rad) { return rad * 180.0 / M_PI; };
+
+  double angle_rad = rad_on ? current : to_radians(current);
+
   switch (op) {
   case Op::NEG:
     return -current;
   case Op::SQRT:
-    if (current > 0) {
+    if (current >= 0) {
       return std::sqrt(current);
     } else {
-      std::cerr << "Bad argument for SQRT: " << current << std::endl;
-      [[fallthrough]];
+      return cout_bad_argument("SQRT");
     }
+  case Op::RAD:
+    rad_on = true;
+    return current;
+  case Op::DEG:
+    rad_on = false;
+    return current;
+  case Op::SIN:
+    return std::sin(angle_rad);
+  case Op::COS:
+    return std::cos(angle_rad);
+  case Op::TAN:
+    if (std::abs(std::cos(angle_rad)) < 1e-10) {
+      return cout_bad_argument("TAN");
+    }
+    return std::tan(angle_rad);
+  case Op::CTN:
+    if (std::abs(std::sin(angle_rad)) < 1e-10) {
+      return cout_bad_argument("CTN");
+    }
+    return 1.0 / std::tan(angle_rad);
+  case Op::ASIN:
+    if (current < -1.0 || current > 1.0)
+      return cout_bad_argument("ASIN");
+    return rad_on ? std::asin(current) : to_degrees(std::asin(current));
+  case Op::ACOS:
+    if (current < -1.0 || current > 1.0)
+      return cout_bad_argument("ACOS");
+    return rad_on ? std::acos(current) : to_degrees(std::acos(current));
+  case Op::ATAN:
+    return rad_on ? std::atan(current) : to_degrees(std::atan(current));
+  case Op::ACTN:
+    return rad_on ? (M_PI / 2.0 - std::atan(current))
+                  : to_degrees(M_PI / 2.0 - std::atan(current));
   default:
     return current;
   }
@@ -184,7 +279,8 @@ double binary(const Op op, const double left, const double right) {
 
 } // anonymous namespace
 
-double process_line(const double current, const std::string &line) {
+double process_line(const double current, bool &rad_on,
+                    const std::string &line) {
   auto [op, i] = parse_op(line, 0);
   switch (arity(op)) {
   case 2: {
@@ -206,7 +302,7 @@ double process_line(const double current, const std::string &line) {
                 << line.substr(i) << "'" << std::endl;
       break;
     }
-    return unary(current, op);
+    return unary(current, rad_on, op);
   }
   default:
     break;
