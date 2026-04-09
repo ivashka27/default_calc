@@ -78,6 +78,8 @@ std::pair<Op, std::size_t> parse_op(const std::string &line, std::size_t i) {
   return {Op::ERR, i};
 }
 
+// note that spaces are only skipped in the middle
+// e.g. "      5" is invalid and "+      5" is valid
 std::size_t skip_ws(const std::string &line, std::size_t i) {
   while (i < line.size() && std::isspace(line[i])) {
     ++i;
