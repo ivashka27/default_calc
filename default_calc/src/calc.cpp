@@ -1,8 +1,10 @@
-#include "calc.hpp"
+#include "../include/calc.hpp"
 
+#define _USE_MATH_DEFINES // for M_PI
 #include <cctype> // for std::isspace
 #include <cmath> // various math functions
 #include <iostream> // for error reporting via std::cerr
+#include <string> // for std::string::compare
 
 namespace {
 
@@ -19,6 +21,17 @@ enum class Op {
     , NEG
     , POW
     , SQRT
+
+    , SIN
+    , COS
+    , TAN
+    , CTN
+    , ASIN
+    , ACOS
+    , ATAN
+    , ACTN
+    , RAD
+    , DEG
 };
 
 std::size_t arity(const Op op)
@@ -29,6 +42,17 @@ std::size_t arity(const Op op)
         // unary
         case Op::NEG: return 1;
         case Op::SQRT: return 1;
+
+        case Op::SIN: return 1;
+        case Op::COS: return 1;
+        case Op::TAN: return 1;
+        case Op::CTN: return 1;
+        case Op::ASIN: return 1;
+        case Op::ACOS: return 1;
+        case Op::ATAN: return 1;
+        case Op::ACTN: return 1;
+        case Op::RAD: return 1;
+        case Op::DEG: return 1;
         // binary
         case Op::SET: return 2;
         case Op::ADD: return 2;
@@ -59,7 +83,7 @@ Op parse_op(const std::string & line, std::size_t & i)
         case '7':
         case '8':
         case '9':
-            --i; // a first digit is a part of op's argument
+            i--;
             return Op::SET;
         case '+':
             return Op::ADD;
@@ -75,26 +99,73 @@ Op parse_op(const std::string & line, std::size_t & i)
             return Op::NEG;
         case '^':
             return Op::POW;
+        // реализовал проверку "текстовых" операций с помощью std::string::compare
+        // чтобы избавиться от большого количества влолженных свитч кейсов
+        case 'A':
+            if (line.compare(i, 3, "SIN") == 0) {
+                i += 3;
+                return Op::ASIN;
+            }
+            else if (line.compare(i, 3, "COS") == 0) {
+                i += 3;
+                return Op::ACOS;
+            }
+            else if (line.compare(i, 3, "TAN") == 0) {
+                i += 3;
+                return Op::ATAN;
+            }
+            else if (line.compare(i, 3, "CTN") == 0) {
+                i += 3;
+                return Op::ACTN;
+            }
+            return rollback(1);
+
+        case 'C':
+            if (line.compare(i, 2, "OS") == 0) {
+                i += 2;
+                return Op::COS;
+            }
+            else if (line.compare(i, 2, "TN") == 0) {
+                i += 2;
+                return Op::CTN;
+            }
+            return rollback(1);
+
+        case 'D':
+            if (line.compare(i, 2, "EG") == 0) {
+                i += 2;
+                return Op::DEG;
+            }
+            return rollback(1);
+
+        case 'R':
+            if (line.compare(i, 2, "AD") == 0) {
+                i += 2;
+                return Op::RAD;
+            }
+            return rollback(1);
+
         case 'S':
-                switch (line[i++]) {
-                    case 'Q':
-                        switch (line[i++]) {
-                            case 'R':
-                                switch (line[i++]) {
-                                    case 'T':
-                                        return Op::SQRT;
-                                    default:
-                                        return rollback(4);
-                                }
-                            default:
-                                return rollback(3);
-                        }
-                    default:
-                        return rollback(2);
-                }
+            if (line.compare(i, 3, "QRT") == 0) {
+                i += 3;
+                return Op::SQRT;
+            }
+            else if (line.compare(i, 2, "IN") == 0) {
+                i += 2;
+                return Op::SIN;
+            }
+            return rollback(1);
+
+        case 'T':
+            if (line.compare(i, 2, "AN") == 0) {
+                i += 2;
+                return Op::TAN;
+            }
+            return rollback(1);
+
         default:
-                return rollback(1);
-    }
+            return rollback(1);
+    }    
 }
 
 std::size_t skip_ws(const std::string & line, std::size_t i)
@@ -153,9 +224,26 @@ double parse_arg(const std::string & line, std::size_t & i)
     return res;
 }
 
-double unary(const double current, const Op op)
+double to_rad(const double current, bool & rad_on)
 {
-    switch (op) {
+    if (!rad_on) {
+        return current * M_PI / 180.0;
+    }
+    return current;
+
+}
+
+double to_deg(const double current, bool & rad_on)
+{
+    if (!rad_on) {
+        return current * 180.0 / M_PI;
+    }
+    return current;
+}
+
+double unary(const double current, bool & rad_on, const Op op)
+{
+        switch (op) {
         case Op::NEG:
             return -current;
         case Op::SQRT:
@@ -164,8 +252,55 @@ double unary(const double current, const Op op)
             }
             else {
                 std::cerr << "Bad argument for SQRT: " << current << std::endl;
-                [[fallthrough]];
+                return current; // возвращаем без изменений, чтобы код не проваливался в следующий кейс
             }
+
+        case Op::SIN:
+            return std::sin(to_rad(current, rad_on));
+        case Op::COS:
+            return std::cos(to_rad(current, rad_on));
+        case Op::TAN:
+            if (std::cos(to_rad(current, rad_on)) != 0.0) {
+                return std::tan(to_rad(current, rad_on));
+            }
+            else {
+                std::cerr << "Bad argument for TAN: " << current << std::endl;
+                return current;;
+            }
+        case Op::CTN:
+            if (std::sin(to_rad(current, rad_on)) != 0.0) {
+                return std::cos(to_rad(current, rad_on)) / std::sin(to_rad(current, rad_on));
+            }
+            else {
+                std::cerr << "Bad argument for CTN: " << current << std::endl;
+                return current;;
+            }
+        case Op::ASIN:
+            if (current >= -1 && current <= 1) {
+                return to_deg(std::asin(current), rad_on);
+            }
+            else {
+                std::cerr << "Bad argument for ASIN: " << current << std::endl;
+                return current;
+            }
+        case Op::ACOS:
+            if (current >= -1 && current <= 1) {
+                return to_deg(std::acos(current), rad_on);
+            }
+            else {
+                std::cerr << "Bad argument for ACOS: " << current << std::endl;
+                return current;;
+            }
+        case Op::ATAN:
+            return to_deg(std::atan(current), rad_on);
+        case Op::ACTN:
+                return to_deg(M_PI / 2 - std::atan(current), rad_on);
+        case Op::RAD:
+            rad_on = true;
+            return current;
+        case Op::DEG:
+            rad_on = false;
+            return current;
         default:
             return current;
     }
@@ -207,7 +342,7 @@ double binary(const Op op, const double left, const double right)
 
 } // anonymous namespace
 
-double process_line(const double current, const std::string & line)
+double process_line(const double current, bool & rad_on, const std::string & line)
 {
     std::size_t i = 0;
     const auto op = parse_op(line, i);
@@ -230,7 +365,7 @@ double process_line(const double current, const std::string & line)
                         std::cerr << "Unexpected suffix for a unary operation: '" << line.substr(i) << "'" << std::endl;
                         break;
                     }
-                    return unary(current, op);
+                    return unary(current, rad_on, op);
                 }
         default: break;
     }
