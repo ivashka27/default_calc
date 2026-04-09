@@ -19,6 +19,8 @@ enum class Op {
     , NEG
     , POW
     , SQRT
+    , FACT
+    , LOG
 };
 
 std::size_t arity(const Op op)
@@ -29,6 +31,7 @@ std::size_t arity(const Op op)
         // unary
         case Op::NEG: return 1;
         case Op::SQRT: return 1;
+        case Op::FACT: return 1;
         // binary
         case Op::SET: return 2;
         case Op::ADD: return 2;
@@ -37,6 +40,7 @@ std::size_t arity(const Op op)
         case Op::DIV: return 2;
         case Op::REM: return 2;
         case Op::POW: return 2;
+        case Op::LOG: return 2;
     }
     return 0;
 }
@@ -75,6 +79,20 @@ Op parse_op(const std::string & line, std::size_t & i)
             return Op::NEG;
         case '^':
             return Op::POW;
+        case '!':
+            return Op::FACT;
+        case 'L':
+                switch (line[i++]){
+                    case 'O':
+                       switch (line[i++]){
+                        case 'G':
+                            return Op::LOG;
+                        default:
+                          return rollback(3);
+                       }
+                    default:
+                        return rollback(2);
+                }
         case 'S':
                 switch (line[i++]) {
                     case 'Q':
@@ -152,7 +170,15 @@ double parse_arg(const std::string & line, std::size_t & i)
     }
     return res;
 }
-
+long long factorial(int value){
+    if (value<0){
+        return 0;
+    }
+    else if (value==0){
+        return 1;
+    }
+        return factorial(value-1)*value;
+}
 double unary(const double current, const Op op)
 {
     switch (op) {
@@ -164,6 +190,14 @@ double unary(const double current, const Op op)
             }
             else {
                 std::cerr << "Bad argument for SQRT: " << current << std::endl;
+                [[fallthrough]];
+            }
+        case Op::FACT:
+            if (floor(current)==current){
+                return factorial(current);
+            }
+            else{
+                std::cerr << "Bad argument for factorial: " << current << std::endl;
                 [[fallthrough]];
             }
         default:
@@ -200,6 +234,20 @@ double binary(const Op op, const double left, const double right)
             }
         case Op::POW:
             return std::pow(left, right);
+        case Op::LOG:
+            if (right>0 && left>0){
+                return std::log(right)/std::log(left);
+            }
+            else {
+                if(left<=0){
+                    std::cerr << "Bad base for logarithm: " << left << std::endl;
+                    return left;
+                }
+                if(right<=0){
+                    std::cerr << "Bad argument for logarithm: " << right << std::endl;
+                    return left;
+                }
+            }
         default:
             return left;
     }
