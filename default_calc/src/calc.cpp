@@ -1,5 +1,5 @@
 #include "calc.hpp"
-
+#include <string>
 #include <cctype> // for std::isspace
 #include <cmath> // various math functions
 #include <iostream> // for error reporting via std::cerr
@@ -97,6 +97,80 @@ Op parse_op(const std::string & line, std::size_t & i)
     }
 }
 
+double parse_number(const std::string& token) {
+    if (token.size() > 2 && token[0] == '0' && (token[1] == 'b' || token[1] == 'B')) {
+        std::string num = token.substr(2);
+        bool frac = false;
+        double result = 0.0;
+        double fraction = 1.0;
+        for (char c : num) {
+            if (c == '.') {
+                frac = true;
+                continue;
+            }
+            int digit;
+            if (c >= '0' && c <= '1') digit = c - '0';
+            else return NAN;
+            if (!frac) {
+                result = result * 2 + digit;
+            }
+            else {
+                fraction /= 2;
+                result += digit * fraction;
+            }
+        }
+        return result;
+    }
+    if (token.size() > 2 && token[0] == '0' && (token[1] == 'x' || token[1] == 'X')) {
+        std::string num = token.substr(2);
+        bool frac = false;
+        double result = 0.0;
+        double fraction = 1.0;
+        for (char c : num) {
+            if (c == '.') {
+                frac = true;
+                continue;
+            }
+            int digit;
+            if (c >= '0' && c <= '9') digit = c - '0';
+            else if (c >= 'A' && c <= 'F') digit = 10 + (c - 'A');
+            else if (c >= 'a' && c <= 'f') digit = 10 + (c - 'a');
+            else return NAN;
+            if (!frac) {
+                result = result * 16 + digit;
+            }
+            else {
+                fraction /= 16;
+                result += digit * fraction;
+            }
+        }
+        return result;
+    }
+    if (token.size() > 1 && token[0] == '0' && token[1] != '.' && !(token[1] == 'b' || token[1] == 'B' || token[1] == 'x' || token[1] == 'X')) {
+        std::string num = token;
+        bool frac = false;
+        double result = 0.0;
+        double fraction = 1.0;
+        for (char c : num) {
+            if (c == '.') {
+                frac = true;
+                continue;
+            }
+            if (c < '0' || c > '7') return NAN;
+            int digit = c - '0';
+            if (!frac) {
+                result = result * 8 + digit;
+            }
+            else {
+                fraction /= 8;
+                result += digit * fraction;
+            }
+        }
+        return result;
+    }
+    return std::stod(token);
+}
+
 std::size_t skip_ws(const std::string & line, std::size_t i)
 {
     while (i < line.size() && std::isspace(line[i])) {
@@ -105,52 +179,15 @@ std::size_t skip_ws(const std::string & line, std::size_t i)
     return i;
 }
 
-double parse_arg(const std::string & line, std::size_t & i)
-{
-    double res = 0;
-    std::size_t count = 0;
-    bool good = true;
-    bool integer = true;
-    double fraction = 1;
-    while (good && i < line.size() && count < max_decimal_digits) {
-        switch (line[i]) {
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-                if (integer) {
-                    res *= 10;
-                    res += line[i] - '0';
-                }
-                else {
-                    fraction /= 10;
-                    res += (line[i] - '0') * fraction;
-                }
-                ++i;
-                ++count;
-                break;
-            case '.':
-                integer = false;
-                ++i;
-                break;
-            default:
-                good = false;
-                break;
-        }
+double parse_arg(const std::string& line, std::size_t& i) {
+    std::size_t start = i;
+    while (i < line.size() && !std::isspace(line[i])) ++i;
+    std::string token = line.substr(start, i - start);
+    double val = parse_number(token);
+    if (std::isnan(val)) {
+        std::cerr << "Argument parsing error: " << token << std::endl;
     }
-    if (!good) {
-        std::cerr << "Argument parsing error at " << i << ": '" << line.substr(i) << "'" << std::endl;
-    }
-    else if (i < line.size()) {
-        std::cerr << "Argument isn't fully parsed, suffix left: '" << line.substr(i) << "'" << std::endl;
-    }
-    return res;
+    return val;
 }
 
 double unary(const double current, const Op op)
@@ -209,6 +246,63 @@ double binary(const Op op, const double left, const double right)
 
 double process_line(const double current, const std::string & line)
 {
+    std::size_t start = skip_ws(line, 0);
+    if (start >= line.size()) return current;
+
+    if (line[start] == '(') {
+        std::size_t op_start = start + 1;
+        std::size_t op_end = line.find(')', op_start);
+        if (op_end == std::string::npos) {
+            std::cerr << "Missing closing parenthesis for fold operation" << std::endl;
+            return current;
+        }
+        std::string op_str = line.substr(op_start, op_end - op_start);
+        Op op = Op::ERR;
+        if (op_str == "+") op = Op::ADD;
+        else if (op_str == "-") op = Op::SUB;
+        else if (op_str == "*") op = Op::MUL;
+        else if (op_str == "/") op = Op::DIV;
+        else if (op_str == "%") op = Op::REM;
+        else if (op_str == "^") op = Op::POW;
+        else {
+            std::cerr << "Unknown fold operator: " << op_str << std::endl;
+            return current;
+        }
+
+        std::size_t after_paren = skip_ws(line, op_end + 1);
+        std::string rest = line.substr(after_paren);
+        if (rest.empty()) {
+            std::cerr << "No arguments for fold operation" << std::endl;
+            return current;
+        }
+
+        std::vector<std::string> tokens;
+        std::string token;
+        for (char c : rest) {
+            if (std::isspace(c)) {
+                if (!token.empty()) {
+                    tokens.push_back(token);
+                    token.clear();
+                }
+            }
+            else {
+                token += c;
+            }
+        }
+        if (!token.empty()) tokens.push_back(token);
+
+        double result = current;
+        for (const auto& t : tokens) {
+            double val = parse_number(t);
+            if (std::isnan(val)) {
+                std::cerr << "Invalid number in fold: " << t << std::endl;
+                return current;
+            }
+            result = binary(op, result, val);
+        }
+        return result;
+    }
+
     std::size_t i = 0;
     const auto op = parse_op(line, i);
     switch (arity(op)) {
