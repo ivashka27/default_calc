@@ -1,5 +1,4 @@
-#include "calc.hpp"
-
+#include "hw_calc.hpp"
 #include <cctype> // for std::isspace
 #include <cmath> // various math functions
 #include <iostream> // for error reporting via std::cerr
@@ -19,6 +18,8 @@ enum class Op {
     , NEG
     , POW
     , SQRT
+    , FACT // factorial operation
+    , LOG // logarithm operation
 };
 
 std::size_t arity(const Op op)
@@ -29,6 +30,7 @@ std::size_t arity(const Op op)
         // unary
         case Op::NEG: return 1;
         case Op::SQRT: return 1;
+        case Op::FACT: return 1;
         // binary
         case Op::SET: return 2;
         case Op::ADD: return 2;
@@ -37,6 +39,7 @@ std::size_t arity(const Op op)
         case Op::DIV: return 2;
         case Op::REM: return 2;
         case Op::POW: return 2;
+        case Op::LOG: return 2;
     }
     return 0;
 }
@@ -45,9 +48,10 @@ Op parse_op(const std::string & line, std::size_t & i)
 {
     const auto rollback = [&i, &line] (const std::size_t n) {
         i -= n;
-        std::cerr << "Unknown operation " << line << std::endl;
+        std::cerr << "Unknown operation" << line << std::endl;
         return Op::ERR;
     };
+
     switch (line[i++]) {
         case '0':
         case '1':
@@ -61,6 +65,7 @@ Op parse_op(const std::string & line, std::size_t & i)
         case '9':
             --i; // a first digit is a part of op's argument
             return Op::SET;
+
         case '+':
             return Op::ADD;
         case '-':
@@ -75,26 +80,44 @@ Op parse_op(const std::string & line, std::size_t & i)
             return Op::NEG;
         case '^':
             return Op::POW;
+        case '!':
+            return Op::FACT; // factorial operator
+
         case 'S':
-                switch (line[i++]) {
-                    case 'Q':
-                        switch (line[i++]) {
-                            case 'R':
-                                switch (line[i++]) {
-                                    case 'T':
-                                        return Op::SQRT;
-                                    default:
-                                        return rollback(4);
-                                }
-                            default:
-                                return rollback(3);
-                        }
-                    default:
-                        return rollback(2);
-                }
+            switch (line[i++]) {
+                case 'Q':
+                    switch (line[i++]) {
+                        case 'R':
+                            switch (line[i++]) {
+                                case 'T':
+                                    return Op::SQRT;
+                                default:
+                                    return rollback(4);
+                            }
+                        default:
+                            return rollback(3);
+                    }
+                default:
+                    return rollback(2);
+            }
+            
+        // handle LOG command
+        case 'L':
+            switch (line[i++]) {
+                case 'O':
+                    switch (line[i++]) {
+                        case 'G':
+                            return Op::LOG;
+                        default:
+                            return rollback(3);
+                    }
+                default:
+                    return rollback(2);
+            }
         default:
-                return rollback(1);
+            return rollback(1);
     }
+
 }
 
 std::size_t skip_ws(const std::string & line, std::size_t i)
@@ -130,11 +153,13 @@ double parse_arg(const std::string & line, std::size_t & i)
                 }
                 else {
                     fraction /= 10;
-                    res += (line[i] - '0') * fraction;
+                    res += (line[i] - '0')  * fraction;
                 }
+
                 ++i;
                 ++count;
                 break;
+
             case '.':
                 integer = false;
                 ++i;
@@ -145,12 +170,13 @@ double parse_arg(const std::string & line, std::size_t & i)
         }
     }
     if (!good) {
-        std::cerr << "Argument parsing error at " << i << ": '" << line.substr(i) << "'" << std::endl;
+        std::cerr << "Argument parsing error at " << i << ": '" << line.substr(i) << "'" << std:: endl;
     }
     else if (i < line.size()) {
         std::cerr << "Argument isn't fully parsed, suffix left: '" << line.substr(i) << "'" << std::endl;
     }
     return res;
+
 }
 
 double unary(const double current, const Op op)
@@ -166,12 +192,25 @@ double unary(const double current, const Op op)
                 std::cerr << "Bad argument for SQRT: " << current << std::endl;
                 [[fallthrough]];
             }
+        case Op::FACT: // compute factorial
+            if (std::floor(current) == current && current >= 0) { // ensure current is a non‑negative integer
+                double res = 1;
+                for (int i = 2; i <= current; i++) {
+                        res *= i;
+                    }
+                    return res;
+            }
+            else {
+                std::cerr << "Bad argument for factorial: " << current << std::endl;
+                [[fallthrough]];
+            }
         default:
             return current;
+            
     }
 }
 
-double binary(const Op op, const double left, const double right)
+double binary(const Op op, double left, const double right)
 {
     switch (op) {
         case Op::SET:
@@ -200,6 +239,21 @@ double binary(const Op op, const double left, const double right)
             }
         case Op::POW:
             return std::pow(left, right);
+        
+        case Op::LOG: // logarithm with arbitrary base
+        {
+            double arg = left;
+            double base = right;
+            if (arg <= 0) {
+                std::cerr << "Bad argument for logarithm: " << arg << std::endl;
+            }
+            else if (base <= 0 || base == 1) {
+                std::cerr << "Bad base for logarithm: " << base << std::endl;
+            }
+            else {
+                return std::log(arg) / std::log(base);
+            }
+        }
         default:
             return left;
     }
