@@ -105,46 +105,90 @@ std::size_t skip_ws(const std::string & line, std::size_t i)
     return i;
 }
 
-double parse_arg(const std::string & line, std::size_t & i)
+int digit_in_base(const char c, const unsigned base)
+{
+    int v = -1;
+    if (c >= '0' && c <= '9') {
+        v = c - '0';
+    }
+    else {
+        const unsigned char u = static_cast<unsigned char>(c);
+        const char lc = static_cast<char>(std::tolower(u));
+        if (lc >= 'a' && lc <= 'f') {
+            v = 10 + (lc - 'a');
+        }
+    }
+    if (v < 0 || static_cast<unsigned>(v) >= base) {
+        return -1;
+    }
+    return v;
+}
+
+double parse_number_in_base(const std::string & line, std::size_t & i, const unsigned base,
+    std::size_t & count, bool & good)
 {
     double res = 0;
-    std::size_t count = 0;
-    bool good = true;
     bool integer = true;
     double fraction = 1;
     while (good && i < line.size() && count < max_decimal_digits) {
-        switch (line[i]) {
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-                if (integer) {
-                    res *= 10;
-                    res += line[i] - '0';
-                }
-                else {
-                    fraction /= 10;
-                    res += (line[i] - '0') * fraction;
-                }
-                ++i;
-                ++count;
-                break;
-            case '.':
-                integer = false;
-                ++i;
-                break;
-            default:
+        if (line[i] == '.') {
+            if (!integer) {
                 good = false;
                 break;
+            }
+            integer = false;
+            ++i;
+            continue;
+        }
+        const int d = digit_in_base(line[i], base);
+        if (d < 0) {
+            good = false;
+            break;
+        }
+        if (integer) {
+            res = res * static_cast<double>(base) + static_cast<double>(d);
+        }
+        else {
+            fraction /= static_cast<double>(base);
+            res += static_cast<double>(d) * fraction;
+        }
+        ++i;
+        ++count;
+    }
+    return res;
+}
+
+double parse_arg(const std::string & line, std::size_t & i)
+{
+    std::size_t count = 0;
+    bool good = true;
+    unsigned base = 10;
+    bool radix_prefix = false;
+
+    if (i < line.size() && line[i] == '0' && i + 1 < line.size()) {
+        const char c1 = line[i + 1];
+        if (c1 == 'b' || c1 == 'B') {
+            base = 2;
+            radix_prefix = true;
+            i += 2;
+        }
+        else if (c1 == 'x' || c1 == 'X') {
+            base = 16;
+            radix_prefix = true;
+            i += 2;
+        }
+        else if (c1 >= '0' && c1 <= '7') {
+            base = 8;
         }
     }
-    if (!good) {
+
+    const double res = parse_number_in_base(line, i, base, count, good);
+
+    if (radix_prefix && count == 0 && good) {
+        good = false;
+        std::cerr << "Argument parsing error at " << i << ": expected digit after radix prefix" << std::endl;
+    }
+    else if (!good) {
         std::cerr << "Argument parsing error at " << i << ": '" << line.substr(i) << "'" << std::endl;
     }
     else if (i < line.size()) {
@@ -205,7 +249,7 @@ double binary(const Op op, const double left, const double right)
     }
 }
 
-} // anonymous namespace
+}
 
 double process_line(const double current, const std::string & line)
 {
