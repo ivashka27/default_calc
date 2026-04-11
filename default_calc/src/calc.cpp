@@ -41,60 +41,70 @@ std::size_t arity(const Op op)
     return 0;
 }
 
-Op parse_op(const std::string & line, std::size_t & i)
+double parse_arg(const std::string & line, std::size_t & i)
 {
-    const auto rollback = [&i, &line] (const std::size_t n) {
-        i -= n;
-        std::cerr << "Unknown operation " << line << std::endl;
-        return Op::ERR;
+    // Функция для перевода символа в числовое значение
+    auto digit_value = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+        if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+        return -1; // невалидный символ
     };
-    switch (line[i++]) {
-        case '0':
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-        case '8':
-        case '9':
-            --i; // a first digit is a part of op's argument
-            return Op::SET;
-        case '+':
-            return Op::ADD;
-        case '-':
-            return Op::SUB;
-        case '*':
-            return Op::MUL;
-        case '/':
-            return Op::DIV;
-        case '%':
-            return Op::REM;
-        case '_':
-            return Op::NEG;
-        case '^':
-            return Op::POW;
-        case 'S':
-                switch (line[i++]) {
-                    case 'Q':
-                        switch (line[i++]) {
-                            case 'R':
-                                switch (line[i++]) {
-                                    case 'T':
-                                        return Op::SQRT;
-                                    default:
-                                        return rollback(4);
-                                }
-                            default:
-                                return rollback(3);
-                        }
-                    default:
-                        return rollback(2);
-                }
-        default:
-                return rollback(1);
+
+    int base = 10; // по умолчанию - десятичная система
+
+    //  Определяем систему счисления по префиксу
+    if (i + 1 < line.size() && line[i] == '0') {
+        if (line[i + 1] == 'b' || line[i + 1] == 'B') {
+            // двоичное число
+            base = 2;
+            i += 2;
+        }
+        else if (line[i + 1] == 'x' || line[i + 1] == 'X') {
+            // шестнадцатеричное
+            base = 16;
+            i += 2;
+        }
+        else {
+            // восьмеричное
+            base = 8;
+            i += 1;
+        }
     }
+
+    double res = 0;        // итоговое число
+    bool integer = true;  // сейчас читаем целую часть
+    double fraction = 1;  // множитель для дробной части
+
+    while (i < line.size()) {
+
+        // если встретили точку — переходим к дробной части
+        if (line[i] == '.') {
+            integer = false;
+            ++i;
+            continue;
+        }
+
+        // получаем числовое значение текущего символа
+        int val = digit_value(line[i]);
+
+        // если символ не подходит для текущей системы счисления — выходим
+        if (val < 0 || val >= base) break;
+
+        if (integer) {
+            // целая часть
+            // сдвигаем число в текущей системе счисления
+            res = res * base + val;
+        } else {
+            // дробная часть
+            // каждый следующий разряд делим на base
+            fraction /= base;
+            res += val * fraction;
+        }
+
+        ++i;
+    }
+    return res;
 }
 
 std::size_t skip_ws(const std::string & line, std::size_t i)
