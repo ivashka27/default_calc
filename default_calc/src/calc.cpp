@@ -237,7 +237,7 @@ std::size_t skip_ws(const std::string & line, std::size_t i)
     return i;
 }
 
-double parse_arg(const std::string & line, std::size_t & i)
+double parse_arg(const std::string & line, std::size_t & i, bool strict = true) //strict для того, чтобы при выполнии операции сверток не было ошибок
 {
     double res = 0;
     std::size_t count = 0;
@@ -277,7 +277,9 @@ double parse_arg(const std::string & line, std::size_t & i)
         }
     }
     if (!good) {
-        std::cerr << "Argument parsing error at " << i << ": '" << line.substr(i) << "'" << std::endl;
+        if (strict) {
+            std::cerr << "Argument parsing error at " << i << ": '" << line.substr(i) << "'" << std::endl;
+        }
     }
     else if (i < line.size()) {
         std::cerr << "Argument isn't fully parsed, suffix left: '" << line.substr(i) << "'" << std::endl;
@@ -454,29 +456,58 @@ double binary(const Op op, const double left, const double right)
 double process_line(const double current, bool & rad_on, const std::string & line)
 {
     std::size_t i = 0;
-    const auto op = parse_op(line, i);
-    switch (arity(op)) {
-        case 2: {
-                    i = skip_ws(line, i);
-                    const auto old_i = i;
-                    const auto arg = parse_arg(line, i);
-                    if (i == old_i) {
-                        std::cerr << "No argument for a binary operation" << std::endl;
-                        break;
+    i = skip_ws(line, i);
+
+    if (i < line.size() && line[i] == '(') {
+        i++;
+
+        const auto op = parse_op(line, i);
+        
+        if (arity(op) != 2 or op == Op::SET) {
+        std::cerr << "Only binary operations are allowed except for the SET operation" << std::endl;
+        return current;
+        }
+
+        i = skip_ws(line, i);
+        if (i < line.size() && line[i] == ')') i++;
+        
+        double result = current;
+
+        while (i < line.size()) {
+            i = skip_ws(line, i);
+            if (i >= line.size()) break;
+            
+            const auto arg = parse_arg(line, i, false);
+            result = binary(op, result, arg);
+        }
+        return result;
+    }
+    
+    else {
+        const auto op = parse_op(line, i);
+        switch (arity(op)) {
+            case 2: {
+                        i = skip_ws(line, i);
+                        const auto old_i = i;
+                        const auto arg = parse_arg(line, i);
+                        if (i == old_i) {
+                            std::cerr << "No argument for a binary operation" << std::endl;
+                            break;
+                        }
+                        else if (i < line.size()) {
+                            break;
+                        }
+                        return binary(op, current, arg);
                     }
-                    else if (i < line.size()) {
-                        break;
+            case 1: {
+                        if (i < line.size()) {
+                            std::cerr << "Unexpected suffix for a unary operation: '" << line.substr(i) << "'" << std::endl;
+                            break;
+                        }
+                        return unary(current, rad_on, op);
                     }
-                    return binary(op, current, arg);
-                }
-        case 1: {
-                    if (i < line.size()) {
-                        std::cerr << "Unexpected suffix for a unary operation: '" << line.substr(i) << "'" << std::endl;
-                        break;
-                    }
-                    return unary(current, rad_on, op);
-                }
-        default: break;
+            default: break;
+        }
     }
     return current;
 }
