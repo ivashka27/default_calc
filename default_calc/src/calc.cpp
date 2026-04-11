@@ -19,6 +19,16 @@ enum class Op {
     , NEG
     , POW
     , SQRT
+    , SIN
+    , COS
+    , TAN
+    , CTN
+    , ASIN
+    , ACOS
+    , ATAN
+    , ACTN
+    , RAD
+    , DEG
 };
 
 std::size_t arity(const Op op)
@@ -26,9 +36,6 @@ std::size_t arity(const Op op)
     switch (op) {
         // error
         case Op::ERR: return 0;
-        // unary
-        case Op::NEG: return 1;
-        case Op::SQRT: return 1;
         // binary
         case Op::SET: return 2;
         case Op::ADD: return 2;
@@ -37,6 +44,21 @@ std::size_t arity(const Op op)
         case Op::DIV: return 2;
         case Op::REM: return 2;
         case Op::POW: return 2;
+        // unary
+        case Op::NEG: return 1;
+        case Op::SQRT: return 1;        
+        // trigonometry
+        case Op::SIN: return 1;
+        case Op::COS: return 1;
+        case Op::TAN: return 1;
+        case Op::CTN: return 1;
+        case Op::ASIN: return 1;
+        case Op::ACOS: return 1;
+        case Op::ATAN: return 1;
+        case Op::ACTN: return 1;
+        // rad/deg
+        case Op::RAD: return 3;
+        case Op::DEG: return 3;
     }
     return 0;
 }
@@ -89,11 +111,130 @@ Op parse_op(const std::string & line, std::size_t & i)
                             default:
                                 return rollback(3);
                         }
+                    case 'I':
+                        switch (line[i++]) {
+                            case 'N':
+                                return Op::SIN;
+                            default:
+                                return rollback(3);
+                        }
                     default:
                         return rollback(2);
                 }
+        
+        case 'C':
+            switch (line[i++]) {
+                case 'O':
+                    switch (line[i++]) {
+                        case 'S':
+                            return Op::COS;
+                        default:
+                            return rollback(3);
+                    }
+                case 'T':
+                    switch (line[i++]) {
+                        case 'N':
+                            return Op::CTN;
+                        default:
+                            return rollback(3);
+                    }
+                default:
+                    return rollback(2);
+            }
+
+        case 'T':
+            switch (line[i++]) {
+                case 'A':
+                    switch (line[i++]) {
+                        case 'N':
+                            return Op::TAN;
+                        default:
+                            return rollback(3);
+                    }
+                default:
+                    return rollback(2);
+            }
+        
+        case 'A':
+            switch (line[i++]) {
+                case 'S':
+                    switch (line[i++]) {
+                        case 'I':
+                            switch (line[i++]) {
+                                case 'N':
+                                    return Op::ASIN;
+                                default:
+                                    return rollback(4);
+                            }
+                        default:
+                            return rollback(3);
+                    }
+                
+                case 'C':
+                    switch (line[i++]) {
+                        case 'O':
+                            switch (line[i++]) {
+                                case 'S':
+                                    return Op::ACOS;
+                                default:
+                                    return rollback(4);
+                            }
+                        case 'T':
+                            switch (line[i++]) {
+                                case 'N':
+                                    return Op::ACTN;
+                                default:
+                                    return rollback(4);
+                            }
+                        default:
+                            return rollback(3);
+                    }
+
+                case 'T':
+                    switch (line[i++]) {
+                        case 'A':
+                            switch (line[i++]) {
+                                case 'N':
+                                    return Op::ATAN;
+                                default:
+                                    return rollback(4);
+                            }
+                        default:
+                            return rollback(3);
+                    }
+
+                default:
+                    return rollback(2);
+            }
+        
+        case 'R':
+            switch (line[i++]) {
+                case 'A':
+                    switch (line[i++]) {
+                        case 'D':
+                            return Op::RAD;
+                        default:
+                            return rollback(3);
+                    }
+                default:
+                    return rollback(2);
+            }
+
+        case 'D':
+            switch (line[i++]) {
+                case 'E':
+                    switch (line[i++]) {
+                        case 'G':
+                            return Op::DEG;
+                        default:
+                            return rollback(3);
+                    }
+                default:
+                    return rollback(2);
+            }
+        
         default:
-                return rollback(1);
+            return rollback(1);
     }
 }
 
@@ -153,7 +294,7 @@ double parse_arg(const std::string & line, std::size_t & i)
     return res;
 }
 
-double unary(const double current, const Op op)
+double unary(const double current, bool rad_on, const Op op) 
 {
     switch (op) {
         case Op::NEG:
@@ -164,12 +305,68 @@ double unary(const double current, const Op op)
             }
             else {
                 std::cerr << "Bad argument for SQRT: " << current << std::endl;
-                [[fallthrough]];
+                return current;
             }
+        case Op::SIN:
+            if (rad_on == false) {
+                return std::sin(current*M_PI/180);
+            }
+            return std::sin(current);
+        case Op::COS:
+            if (rad_on == false) {
+                return std::cos(current*M_PI/180);
+            }
+            return std::cos(current);
+        case Op::TAN:
+            if (rad_on == false) {
+                return std::tan(current*M_PI/180);
+            }
+            return std::tan(current);
+        case Op::CTN:
+            if (rad_on == false) {
+                return std::cos(current*M_PI/180)/std::sin(current*M_PI/180);
+            }
+            return 1/std::tan(current);
+
+        case Op::ASIN:
+            if (-1 <= current && current <= 1) {
+                if (rad_on == false) {
+                    return std::asin(current)*180/M_PI;
+                }
+                return std::asin(current);
+            } else {
+                std::cerr << "Bad argument for ASIN: " << current << std::endl;
+                return current;
+            }
+
+        case Op::ACOS:
+            if (-1 <= current && current <= 1) {
+                if (rad_on == false) {
+                    return std::acos(current)*180/M_PI;
+                }
+                return std::acos(current);
+            } else {
+                std::cerr << "Bad argument for ACOS: " << current << std::endl;
+                return current;
+            }
+
+        case Op::ATAN:
+            if (rad_on == false) {
+                return std::atan(current)*180/M_PI;
+            }
+            return std::atan(current);
+
+        case Op::ACTN:
+            if (rad_on == false) {
+                return (M_PI/2-std::atan(current))*180/M_PI;
+            }
+            return M_PI/2-std::atan(current);
+
         default:
             return current;
     }
 }
+
 
 double binary(const Op op, const double left, const double right)
 {
@@ -205,13 +402,31 @@ double binary(const Op op, const double left, const double right)
     }
 }
 
+bool select_rad_deg(const Op op) {
+    switch(op) {
+        case Op::RAD:
+            return true;
+        case Op::DEG:
+            return false;
+        default:
+            return false; 
+    }
+}
+
 } // anonymous namespace
 
-double process_line(const double current, const std::string & line)
+double process_line(const double current, bool & rad_on, const std::string & line)
 {
     std::size_t i = 0;
     const auto op = parse_op(line, i);
     switch (arity(op)) {
+        case 1: {
+                    if (i < line.size()) {
+                        std::cerr << "Unexpected suffix for a unary operation: '" << line.substr(i) << "'" << std::endl;
+                        break;
+                    }
+                    return unary(current, rad_on, op);
+                } 
         case 2: {
                     i = skip_ws(line, i);
                     const auto old_i = i;
@@ -225,12 +440,13 @@ double process_line(const double current, const std::string & line)
                     }
                     return binary(op, current, arg);
                 }
-        case 1: {
-                    if (i < line.size()) {
-                        std::cerr << "Unexpected suffix for a unary operation: '" << line.substr(i) << "'" << std::endl;
-                        break;
+        case 3: {
+                    rad_on = select_rad_deg(op);
+                    if (rad_on == true) {
+                        std::cout << "Radian mode selected" << std::endl;
+                    } else {
+                        std::cout << "Degrees mode selected" << std::endl;
                     }
-                    return unary(current, op);
                 }
         default: break;
     }
