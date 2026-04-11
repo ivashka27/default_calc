@@ -242,7 +242,7 @@ bool apply_binary(const Op op, const double left, const double right, double &re
 double process_line(const double current, const std::string &line) {
     std::size_t i = skip_ws(line, 0);
 
-    // ===== BONUS BEGIN: fold support =====
+    // bonus
     if (i < line.size() && line[i] == '(') {
         ++i;
         i = skip_ws(line, i);
@@ -284,8 +284,7 @@ double process_line(const double current, const std::string &line) {
             acc = next;
         }
     }
-    // ===== BONUS END =====
-
+    
     const auto op = parse_op(line, i);
 
     switch (arity(op)) {
