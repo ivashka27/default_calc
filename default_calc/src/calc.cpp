@@ -1,12 +1,13 @@
 #include "calc.hpp"
 
-#include <cctype> // for std::isspace
+#include <cctype> // for std::isspace, std::tolower
 #include <cmath> // various math functions
 #include <iostream> // for error reporting via std::cerr
+#include <string>
 
 namespace {
 
-const std::size_t max_decimal_digits = 10;
+const std::size_t max_digits = 10;
 
 enum class Op {
       ERR
@@ -20,6 +21,19 @@ enum class Op {
     , POW
     , SQRT
 };
+
+struct ParseResult {
+    double value = 0;
+    bool ok = false;
+};
+
+std::size_t skip_ws(const std::string & line, std::size_t i)
+{
+    while (i < line.size() && std::isspace(static_cast<unsigned char>(line[i]))) {
+        ++i;
+    }
+    return i;
+}
 
 std::size_t arity(const Op op)
 {
@@ -43,11 +57,12 @@ std::size_t arity(const Op op)
 
 Op parse_op(const std::string & line, std::size_t & i)
 {
-    const auto rollback = [&i, &line] (const std::size_t n) {
+    const auto rollback = [&line, &i] (const std::size_t n) {
         i -= n;
         std::cerr << "Unknown operation " << line << std::endl;
         return Op::ERR;
     };
+
     switch (line[i++]) {
         case '0':
         case '1':
@@ -76,81 +91,116 @@ Op parse_op(const std::string & line, std::size_t & i)
         case '^':
             return Op::POW;
         case 'S':
-                switch (line[i++]) {
-                    case 'Q':
-                        switch (line[i++]) {
-                            case 'R':
-                                switch (line[i++]) {
-                                    case 'T':
-                                        return Op::SQRT;
-                                    default:
-                                        return rollback(4);
-                                }
-                            default:
-                                return rollback(3);
-                        }
-                    default:
-                        return rollback(2);
-                }
+            switch (line[i++]) {
+                case 'Q':
+                    switch (line[i++]) {
+                        case 'R':
+                            switch (line[i++]) {
+                                case 'T':
+                                    return Op::SQRT;
+                                default:
+                                    return rollback(4);
+                            }
+                        default:
+                            return rollback(3);
+                    }
+                default:
+                    return rollback(2);
+            }
         default:
-                return rollback(1);
+            return rollback(1);
     }
 }
 
-std::size_t skip_ws(const std::string & line, std::size_t i)
+bool is_octal_digit(const char c)
 {
-    while (i < line.size() && std::isspace(line[i])) {
-        ++i;
-    }
-    return i;
+    return c >= '0' && c <= '7';
 }
 
-double parse_arg(const std::string & line, std::size_t & i)
+// decode numbers from string
+int decode_digit(const char c)
 {
-    double res = 0;
-    std::size_t count = 0;
-    bool good = true;
-    bool integer = true;
-    double fraction = 1;
-    while (good && i < line.size() && count < max_decimal_digits) {
-        switch (line[i]) {
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-                if (integer) {
-                    res *= 10;
-                    res += line[i] - '0';
-                }
-                else {
-                    fraction /= 10;
-                    res += (line[i] - '0') * fraction;
-                }
-                ++i;
-                ++count;
-                break;
-            case '.':
-                integer = false;
-                ++i;
-                break;
-            default:
-                good = false;
-                break;
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
+    if (c >= 'a' && c <= 'f') {
+        return 10 + (c - 'a');
+    }
+    if (c >= 'A' && c <= 'F') {
+        return 10 + (c - 'A');
+    }
+    return -1;
+}
+
+ParseResult parse_arg(const std::string & line, std::size_t & i)
+{
+    const std::size_t begin = i;
+    std::size_t base = 10;
+    std::size_t digits = 0;
+    bool saw_digit = false;
+
+    // Determine which numeral system is used by the argument prefix.
+    if (i < line.size() && line[i] == '0' && i + 1 < line.size()) {
+        const char next = static_cast<char>(std::tolower(static_cast<unsigned char>(line[i + 1])));
+        if (next == 'b') {
+            base = 2;
+            i += 2;
+        }
+        else if (next == 'x') {
+            base = 16;
+            i += 2;
+        }
+        else if (is_octal_digit(line[i + 1])) {
+            base = 8;
+            ++i;
+            saw_digit = true;
+            digits = 1;
         }
     }
-    if (!good) {
-        std::cerr << "Argument parsing error at " << i << ": '" << line.substr(i) << "'" << std::endl;
+
+    double value = 0;
+    bool integer_part = true;
+    double fraction = 1;
+
+    while (i < line.size()) {
+        if (line[i] == '.') {
+            if (!integer_part) {
+                std::cerr << "Argument parsing error at " << i << ": '" << line.substr(i) << "'" << std::endl;
+                return {};
+            }
+            integer_part = false;
+            ++i;
+            continue;
+        }
+
+        const int digit = decode_digit(line[i]);
+        if (digit < 0 || static_cast<std::size_t>(digit) >= base) {
+            break;
+        }
+        if (digits >= max_digits) {
+            break;
+        }
+
+        saw_digit = true;
+        ++digits;
+        if (integer_part) {
+            // Integer digits are accumulated in the detected base.
+            value = value * static_cast<double>(base) + digit;
+        }
+        else {
+            // Fractional digits use negative powers of the same base.
+            fraction /= static_cast<double>(base);
+            value += digit * fraction;
+        }
+        ++i;
     }
-    else if (i < line.size()) {
-        std::cerr << "Argument isn't fully parsed, suffix left: '" << line.substr(i) << "'" << std::endl;
+
+    if (!saw_digit) {
+        std::cerr << "Argument parsing error at " << begin << ": '" << line.substr(begin) << "'" << std::endl;
+        return {};
     }
-    return res;
+
+    return {value, true};
 }
 
 double unary(const double current, const Op op)
@@ -159,13 +209,11 @@ double unary(const double current, const Op op)
         case Op::NEG:
             return -current;
         case Op::SQRT:
-            if (current > 0) {
+            if (current >= 0) {
                 return std::sqrt(current);
             }
-            else {
-                std::cerr << "Bad argument for SQRT: " << current << std::endl;
-                [[fallthrough]];
-            }
+            std::cerr << "Bad argument for SQRT: " << current << std::endl;
+            return current;
         default:
             return current;
     }
@@ -186,18 +234,14 @@ double binary(const Op op, const double left, const double right)
             if (right != 0) {
                 return left / right;
             }
-            else {
-                std::cerr << "Bad right argument for division: " << right << std::endl;
-                return left;
-            }
+            std::cerr << "Bad right argument for division: " << right << std::endl;
+            return left;
         case Op::REM:
             if (right != 0) {
                 return std::fmod(left, right);
             }
-            else {
-                std::cerr << "Bad right argument for remainder: " << right << std::endl;
-                return left;
-            }
+            std::cerr << "Bad right argument for remainder: " << right << std::endl;
+            return left;
         case Op::POW:
             return std::pow(left, right);
         default:
@@ -209,30 +253,37 @@ double binary(const Op op, const double left, const double right)
 
 double process_line(const double current, const std::string & line)
 {
-    std::size_t i = 0;
-    const auto op = parse_op(line, i);
+    std::size_t i = skip_ws(line, 0);
+    if (i >= line.size()) {
+        std::cerr << "Unknown operation " << line << std::endl;
+        return current;
+    }
+
+    const Op op = parse_op(line, i);
     switch (arity(op)) {
         case 2: {
-                    i = skip_ws(line, i);
-                    const auto old_i = i;
-                    const auto arg = parse_arg(line, i);
-                    if (i == old_i) {
-                        std::cerr << "No argument for a binary operation" << std::endl;
-                        break;
-                    }
-                    else if (i < line.size()) {
-                        break;
-                    }
-                    return binary(op, current, arg);
-                }
-        case 1: {
-                    if (i < line.size()) {
-                        std::cerr << "Unexpected suffix for a unary operation: '" << line.substr(i) << "'" << std::endl;
-                        break;
-                    }
-                    return unary(current, op);
-                }
-        default: break;
+            i = skip_ws(line, i);
+            const std::size_t arg_begin = i;
+            const ParseResult arg = parse_arg(line, i);
+            if (!arg.ok || i == arg_begin) {
+                std::cerr << "No argument for a binary operation" << std::endl;
+                return current;
+            }
+            i = skip_ws(line, i);
+            if (i < line.size()) {
+                std::cerr << "Argument isn't fully parsed, suffix left: '" << line.substr(i) << "'" << std::endl;
+                return current;
+            }
+            return binary(op, current, arg.value);
+        }
+        case 1:
+            i = skip_ws(line, i);
+            if (i < line.size()) {
+                std::cerr << "Unexpected suffix for a unary operation: '" << line.substr(i) << "'" << std::endl;
+                return current;
+            }
+            return unary(current, op);
+        default:
+            return current;
     }
-    return current;
 }
