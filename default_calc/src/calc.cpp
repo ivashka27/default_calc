@@ -309,7 +309,7 @@ switch (op) {
             else return std::cos(to_rad(current));
       }
       case Op::TAN:{
-            if (rad_on && std::fmod(abs(current), PI!=PI/2) return std::tan(current);
+            if (rad_on && std::fmod(abs(current), PI!=PI/2)) return std::tan(current);
             else if (not rad_on && fmod(abs(current), 90.0)!=0) return std::tan(to_rad(current));
             else {
                   std::cerr << "Bad argument for TAN: " << current << std::endl;
