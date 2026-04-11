@@ -41,61 +41,94 @@ std::size_t arity(const Op op)
     return 0;
 }
 
-Op parse_op(const std::string & line, std::size_t & i)
+double parse_arg(const std::string & line, std::size_t & i)
 {
-    const auto rollback = [&i, &line] (const std::size_t n) {
-        i -= n;
-        std::cerr << "Unknown operation " << line << std::endl;
-        return Op::ERR;
+    // Функция для перевода символа в числовое значение
+    auto digit_value = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+        if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+        return -1; // невалидный символ
     };
-    switch (line[i++]) {
-        case '0':
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-        case '8':
-        case '9':
-            --i; // a first digit is a part of op's argument
-            return Op::SET;
-        case '+':
-            return Op::ADD;
-        case '-':
-            return Op::SUB;
-        case '*':
-            return Op::MUL;
-        case '/':
-            return Op::DIV;
-        case '%':
-            return Op::REM;
-        case '_':
-            return Op::NEG;
-        case '^':
-            return Op::POW;
-        case 'S':
-                switch (line[i++]) {
-                    case 'Q':
-                        switch (line[i++]) {
-                            case 'R':
-                                switch (line[i++]) {
-                                    case 'T':
-                                        return Op::SQRT;
-                                    default:
-                                        return rollback(4);
-                                }
-                            default:
-                                return rollback(3);
-                        }
-                    default:
-                        return rollback(2);
-                }
-        default:
-                return rollback(1);
+
+    int base = 10; // по умолчанию — десятичная система
+
+    // Определяем систему счисления по префиксу
+    if (i + 1 < line.size() && line[i] == '0') {
+        if (line[i + 1] == 'b' || line[i + 1] == 'B') {
+            // двоичная: 0b101
+            base = 2;
+            i += 2;
+        }
+        else if (line[i + 1] == 'x' || line[i + 1] == 'X') {
+            // шестнадцатеричная: 0xFF
+            base = 16;
+            i += 2;
+        }
+        else {
+            // восьмеричная: 07721
+            base = 8;
+            i += 1;
+        }
     }
+
+    double res = 0;        // итоговое число
+    bool integer = true;  // флаг: читаем целую часть (до точки)
+    double fraction = 1;  // множитель для дробной части (1 / base^k)
+
+    std::size_t count = 0; // ограничение на количество цифр
+    bool good = true;      // флаг корректности парсинга
+
+    // Основной цикл разбора числа
+    while (i < line.size() && count < max_decimal_digits) {
+
+        // если встретили точку — начинаем читать дробную часть
+        if (line[i] == '.') {
+            integer = false;
+            ++i;
+            continue;
+        }
+
+        // переводим символ в число
+        int val = digit_value(line[i]);
+
+        // если символ не подходит для текущей системы счисления - ошибка
+        if (val < 0 || val >= base) {
+            good = false;
+            break;
+        }
+
+        if (integer) {
+            // целая часть
+            // сдвигаем число в системе счисления (умножаем на base)
+            // и добавляем новую цифру
+            res = res * base + val;
+        } else {
+            // дробная часть
+            // каждый следующий разряд: digit / base^позиция
+            fraction /= base;
+            res += val * fraction;
+        }
+
+        ++i;
+        ++count;
+    }
+
+    //  Обработка ошибок 
+    if (!good) {
+        std::cerr << "Ошибка разбора аргумента в позиции " << i
+                  << ": '" << line.substr(i) << "'" << std::endl;
+    }
+    else if (i < line.size()) {
+        std::cerr << "Аргумент разобран не полностью, остаток: '"
+                  << line.substr(i) << "'" << std::endl;
+    }
+
+    return res;
 }
+
+
+
 
 std::size_t skip_ws(const std::string & line, std::size_t i)
 {
