@@ -172,6 +172,78 @@ double parse_arg(const std::string & line, std::size_t & i)
     return res;
 }
 
+double parse_one_number(const std::string & line, std::size_t & i)
+{
+    const std::size_t start = i;
+    double res = 0;
+    std::size_t count = 0;
+    bool integer = true;
+    double fraction = 1;
+    bool any = false;
+    while (i < line.size() && count < max_decimal_digits) {
+        switch (line[i]) {
+            case '0': case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': case '9':
+                any = true;
+                if (integer) {
+                    res *= 10;
+                    res += line[i] - '0';
+                } else {
+                    fraction /= 10;
+                    res += (line[i] - '0') * fraction;
+                }
+                ++i;
+                ++count;
+                break;
+            case '.':
+                if (!integer) {
+                    goto end_parse_one;
+                }
+                integer = false;
+                ++i;
+                break;
+            default:
+                goto end_parse_one;
+        }
+    }
+end_parse_one:
+    if (!any) {
+        i = start;
+    }
+    return res;
+}
+
+Op parse_fold_op(const std::string & line, std::size_t & i)
+{
+    if (i >= line.size()) {
+        return Op::ERR;
+    }
+    Op op = Op::ERR;
+    switch (line[i++]) {
+        case '+': op = Op::ADD; break;
+        case '-': op = Op::SUB; break;
+        case '*': op = Op::MUL; break;
+        case '/': op = Op::DIV; break;
+        case '%': op = Op::REM; break;
+        case '^': op = Op::POW; break;
+        case 'L':
+            if (i + 2 <= line.size() && line[i] == 'O' && line[i + 1] == 'G') {
+                i += 2;
+                op = Op::LOG;
+            } else {
+                return Op::ERR;
+            }
+            break;
+        default:
+            return Op::ERR;
+    }
+    if (i >= line.size() || line[i] != ')') {
+        return Op::ERR;
+    }
+    ++i;
+    return op;
+}
+
 double unary(const double current, const Op op)
 {
     switch (op) {
@@ -187,7 +259,7 @@ double unary(const double current, const Op op)
             }
         case Op::FAC:   //добавлена логика факториала и обработка ошибок
             if (current < 0 || std::floor(current) != current) {
-                std::cerr << "Bad argument for factorial" << current << std::endl;
+                std::cerr << "Bad argument for factorial: " << current << std::endl;
                 return current;
             }
             else {
@@ -250,7 +322,30 @@ double binary(const Op op, const double left, const double right)
 
 double process_line(const double current, const std::string & line)
 {
-    std::size_t i = 0;
+    std::size_t i = skip_ws(line, 0);
+    if (i < line.size() && line[i] == '(') {
+        ++i;
+        const Op fold_op = parse_fold_op(line, i);
+        if (fold_op == Op::ERR || arity(fold_op) != 2) {
+            std::cerr << "Invalid fold operation" << std::endl;
+            return current;
+        }
+        i = skip_ws(line, i);
+        double acc = current;
+        while (i < line.size()) {
+            const auto old_i = i;
+            const double arg = parse_one_number(line, i);
+            if (i == old_i) {
+                std::cerr << "Expected number in fold at " << i << std::endl;
+                return current;
+            }
+            acc = binary(fold_op, acc, arg);
+            i = skip_ws(line, i);
+        }
+        return acc;
+    }
+
+    i = 0;
     const auto op = parse_op(line, i);
     switch (arity(op)) {
         case 2: {
